@@ -1,0 +1,3 @@
+* * * * * drush php-eval '\Drupal::logger("Deploy")->notice("Drush Run Finished")'
+
+*/60 * * * *  wget -O - -q http://drupalnine.lndo.site/pt-br/cron/yFuylsV0_w916lZikaci4enD_i1dk1CirD8hfP47MCcy9uGkmlrumg5hkdgedyCLkLq5c8ar1A

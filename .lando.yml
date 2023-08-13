@@ -1,0 +1,116 @@
+name: drupalnine
+recipe: drupal9
+config:
+  xdebug: true
+  webroot: web
+  php: 8.1
+  database: mysql:8.0
+  config:
+    php: config/env/php.ini
+proxy:
+  pma:
+    - pma.drupalnine.lndo.site
+  mailhog:
+    - mail.drupalnine.lndo.site
+services:
+  appserver:
+    build:
+      - composer install
+    build_as_root:
+      - apt-get update -y
+      - apt-get install cron -y
+      - apt-get install nano -y
+      - cp -f /app/config/env/docker-php-entrypoint.sh /usr/local/bin/docker-php-entrypoint
+    run_as_root:
+      - service cron start
+    run:
+      - crontab /app/config/env/cron.txt
+    overrides:
+      environment:
+        CONFIG_SYNC: local
+        # Support debugging Drush with XDEBUG.
+        PHP_IDE_CONFIG: "serverName=appserver"
+        DRUSH_OPTIONS_URI: "https://drupalnine.lndo.site"
+        # LANDO_HOST_IP: host.docker.internal
+        # XDEBUG_CONFIG: client_host=host.docker.internal
+  node:
+    type: "node"
+    globals:
+      gulp-cli: latest
+      bower: latest
+  mailhog:
+    type: mailhog:v1.0.0
+    portforward: true
+    hogfrom:
+      - appserver
+  pma:
+    type: phpmyadmin
+    portfoward: true
+    hosts:
+      - database
+env_file:
+  - .env
+tooling:
+  node:
+    service: node
+  npm:
+    service: node
+  gulp:
+    service: node
+  bower:
+    service: node
+  yarn:
+    service: node
+  npx:
+    service: node
+  xdebug-on:
+    service: appserver
+    description: Enable xdebug for Apache.
+    cmd: docker-php-ext-enable xdebug && /etc/init.d/apache2 reload && echo "Enabling xdebug"
+    user: root
+  xdebug-off:
+    service: appserver
+    description: Disable xdebug for Apache.
+    cmd: rm /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && /etc/init.d/apache2 reload && echo "Disabling xdebug"
+    user: root
+  site-install:
+    service: appserver
+    cmd:
+      - chmod -R 777 web/
+      - cp -Rfv config/env/settings.local.php web/sites/default/
+      - cp -Rfv config/env/services.yml web/sites/default/
+      - composer install
+      - drush sql-drop -y
+      - drush si standard --account-pass=admin --db-url=mysql://drupal9:drupal9@database/drupal9 -y
+      - drush upwd admin admin
+      - drush cr -y
+  site-sync:
+    service: appserver
+    cmd:
+      - chmod -R 777 web/
+      - cp -Rfv config/env/settings.local.php web/sites/default/
+      - cp -Rfv config/env/services.yml web/sites/default/
+      - composer install      
+      - drush cr -y
+      - drush cset system.site uuid "e7fddbef-88be-4cea-b889-3b4b22624f58" -y 
+      - drush edel shortcut_set -y
+      - drush upwd admin admin
+      - drush updb -y
+      - drush cim -y      
+      - drush locale:import pt-br /app/config/translations/pt-br.po
+      - drush cr -y
+  site-snapshot:
+    service: appserver
+    cmd:
+      - drush locale:export pt-br > config/translations/pt-br.po -y
+      - drush sql-dump > config/db/database.sql
+  site-restore:
+    service: appserver
+    cmd:
+      #- drush sql-drop -y
+      #- drush sql-cli < /app/config/db/database.sql
+      #- drush locale:import /app/config/translations/pt-br.po -y
+      - composer install
+  excludes:
+    - .idea
+    - .git
